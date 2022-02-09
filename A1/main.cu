@@ -13,33 +13,36 @@ ofstream outfile; //the handle for printing the output
 // 
 // 
 
+// 0 0 0 0 0 0 0 0 0 0
 
 // complete the following kernel...
 __global__ void per_row_column_kernel(long int *A, long int *B, long int *C, long int m, long int n){
 	// (A + B.T) * (B.T - A)
 	// (A * B.T) - (A * A) + (B.T * B.T) - (B.T * A)
-	if (blockIdx.x > m || threadIdx.x > n) { return; }
 
 	int id = threadIdx.x + blockDim.x * blockIdx.x;
+	if (id >= m * n) { return; }
 	// lets use id as the row index for A or column index for B
+	printf("id: %d \n", id);
 
-	C[id * n + i] = 0 // initialize C to 0
+	C[id] = 0; // initialize C to 0
 	for (long int i = 0; i < n; i++) {
 		// [i * n + j] == [i, j]
 
 		// c1 = A[id][i] * B[id][i]
-		long int c1 = A[id * n + i] * B[id * n + i]; // A * B.T
+		// long int c1 = A[id * n + i] * B[id * n + i]; // A * B.T
 
 		// c2 = A[id][i] * A[i][id]
 		long int c2 = A[id * n + i] * A[i * n + id]; // A * A
 
 		// c3 = B[i][id] * B[id][i]
-		long int c3 = B[i * n + id] * B[id * n + i]; // B.T * B.T
+		// long int c3 = B[i * n + id] * B[id * n + i]; // B.T * B.T
 
 		// c4 = B[i][id] * A[id][i]
-		long int c4 = B[i * n + id] * A[id * n + i]; // B.T * A
+		// long int c4 = B[i * n + id] * A[id * n + i]; // B.T * A
 
-		C[id * n + i] += c1 + c2 + c3 + c4;
+		// C[id] += c1 + c2 + c3 + c4;
+		C[id] += c2;
 	}
 }
 
@@ -67,6 +70,16 @@ void printMatrix(long int *arr, long int rows, long int cols, char* filename) {
 		outfile<<"\n";
 	}
 	outfile.close();
+}
+
+void printMatrix(long int *arr, long int rows, long int cols) {
+
+	for(long int i = 0; i < rows; i++) {
+		for(long int j = 0; j < cols; j++) {
+			cout << arr[i * cols + j] << " ";
+		}
+		cout << endl;
+	}
 }
 
 // m -> number of rows
@@ -121,7 +134,8 @@ int main(int argc,char **argv){
 	per_row_column_kernel<<<grid1, block1>>>(d_a, d_b, d_c, m, n);
 	cudaDeviceSynchronize();
 	cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
-	printMatrix(h_c, m, n, "kernel1.txt");
+	printMatrix(h_c, m, n);
+	// printMatrix(h_c, m, n, "kernel1.txt");
 
 	/**
 	 * Kernel 2 - per_column_row_kernel
