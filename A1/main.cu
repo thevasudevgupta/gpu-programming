@@ -7,19 +7,16 @@ using namespace std;
 
 ofstream outfile; //the handle for printing the output
 
-// 1, 2, 3, 5		// 1, 2, 3
-// 5, 6, 7, 7		// 5, 6, 7
-// 2, 4, 7, 9		// 2, 4, 7
-
-// (1 * 1) + (2 * 5) + (3 * 2)
-// 
-// 
-
-// 0 0 0 0 0 0 0 0 0 0
+// (A + B.T) * (B.T - A)
+// A -> (m, n)
+// B -> (n, m)
+// C -> (m, n)
+// m -> number of rows
+// n -> number of columns
 
 // complete the following kernel...
 __global__ void per_row_column_kernel(long int *A, long int *B, long int *C, long int m, long int n){
-	int id = threadIdx.x + blockDim.x * blockIdx.x;
+	unsigned int id = threadIdx.x + blockDim.x * blockIdx.x;
 	if (id >= m) { return; }
 	// lets use id as the row index for A or column index for B
 
@@ -29,16 +26,9 @@ __global__ void per_row_column_kernel(long int *A, long int *B, long int *C, lon
 	}
 }
 
-// (A + B.T) * (B.T - A)
-// A -> (m, n)
-// B -> (n, m)
-// C -> (m, n)
-
 // complete the following kernel...
 __global__ void per_column_row_kernel(long int *A, long int *B, long int *C,long int m, long int n){
-	// int id = threadIdx.x * blockDim.y + threadIdx.y //+ blockDim.x * blockIdx.x;
-	int id = blockIdx.x * blockDim.y * blockDim.x + threadIdx.x * blockDim.y + threadIdx.y;
-	// printf("id: %d\n", id);
+	unsigned int id = blockIdx.x * blockDim.y * blockDim.x + threadIdx.x * blockDim.y + threadIdx.y;
 	if (id >= n) { return; }
 	// lets use id as the column index for A or column index for B
 	// printf("id: %d\n", id);
@@ -49,19 +39,19 @@ __global__ void per_column_row_kernel(long int *A, long int *B, long int *C,long
 	}
 }
 
-// int -> unsigned int
 
 // complete the following kernel...
 __global__ void per_element_kernel(long int *A, long int *B, long int *C,long int m, long int n){
-	int id = blockIdx.y * gridDim.x * blockDim.y * blockDim.x + blockIdx.x * blockDim.y * blockDim.x + threadIdx.x * blockDim.y + threadIdx.y;
+	unsigned int id = blockIdx.y * gridDim.x * blockDim.y * blockDim.x + blockIdx.x * blockDim.y * blockDim.x + threadIdx.x * blockDim.y + threadIdx.y;
 	if (id >= m * n) { return; }
 	// printf("id: %d\n", id);
 
-	int ii = id / n; // row index for A
-	int jj = id % n; // column index for A
+	unsigned int ii = id / n; // row index for A
+	unsigned int jj = id % n; // column index for A
 	long int value = (A[ii * n + jj] + B[jj * m + ii]) * (B[jj * m + ii] - A[ii * n + jj]);
 	C[id] = value;
 }
+
 
 /**
  * Prints any 1D array in the form of a matrix 
@@ -86,75 +76,72 @@ void printMatrix(long int *arr, long int rows, long int cols) {
 		}
 		cout << endl;
 	}
+	cout << endl;
 }
 
-// m -> number of rows
-// n -> number of columns
 
 int main(int argc,char **argv){
 
-	// variable declarations
+	//variable declarations
 	long int m,n;	
-	cin >> m >> n;
+	cin>>m>>n;	
 
-	// host_arrays
-	long int *h_a, *h_b, *h_c;
+	//host_arrays 
+	long int *h_a,*h_b,*h_c;
 
-	// device arrays
-	long int *d_a, *d_b, *d_c;
-
-	// Allocating space for the host_arrays
+	//device arrays 
+	long int *d_a,*d_b,*d_c;
+	
+	//Allocating space for the host_arrays 
 	h_a = (long int *) malloc(m * n * sizeof(long int));
 	h_b = (long int *) malloc(m * n * sizeof(long int));	
 	h_c = (long int *) malloc(m * n * sizeof(long int));	
 
-	// Allocating memory for the device arrays
+	//Allocating memory for the device arrays 
 	cudaMalloc(&d_a, m * n * sizeof(long int));
 	cudaMalloc(&d_b, m * n * sizeof(long int));
 	cudaMalloc(&d_c, m * n * sizeof(long int));
 
 	//Read the input matrix A 
-	for (long int i = 0; i < m * n; i++) {
-		cin >> h_a[i];
+	for(long int i = 0; i < m * n; i++) {
+		cin>>h_a[i];
 	}
 
-	// Read the input matrix B 
-	for (long int i = 0; i < m * n; i++) {
-		cin >> h_b[i];
+	//Read the input matrix B 
+	for(long int i = 0; i < m * n; i++) {
+		cin>>h_b[i];
 	}
 
-	// Transfer the input host arrays to the device 
+	//Transfer the input host arrays to the device 
 	cudaMemcpy(d_a, h_a, m * n * sizeof(long int), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_b, h_b, m * n * sizeof(long int), cudaMemcpyHostToDevice);
 
 	long int gridDimx, gridDimy;
-	//Launch the kernels
+	//Launch the kernels 
 	/**
 	 * Kernel 1 - per_row_column_kernel
 	 * To be launched with 1D grid, 1D block
 	 * */
-	// 10, 12
-	// gridDimx = ceil(float(m) / 1024);
-	// dim3 grid1(gridDimx, 1, 1);
-	// dim3 block1(1024, 1, 1);
-	// per_row_column_kernel<<<grid1, block1>>>(d_a, d_b, d_c, m, n);
-	// cudaDeviceSynchronize();
-	// cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
-	// printMatrix(h_c, m, n);
-	// printMatrix(h_c, m, n, "kernel1.txt");
-
+	gridDimx = ceil(float(m) / 1024);
+	dim3 grid1(gridDimx,1,1);
+	dim3 block1(1024,1,1);
+	per_row_column_kernel<<<grid1,block1>>>(d_a,d_b,d_c,m,n);
+	cudaDeviceSynchronize();
+	cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
+	printMatrix(h_c, m, n);
+	// printMatrix(h_c, m, n,"kernel1.txt");
+	
 	/**
 	 * Kernel 2 - per_column_row_kernel
 	 * To be launched with 1D grid, 2D block
 	 * */
-	// gridDimx = ceil(float(n) / 1024); // 1024 = 32 * 32
-	// dim3 grid2(gridDimx, 1, 1);
-	// dim3 block2(32, 32, 1);
-	// per_column_row_kernel<<<grid2, block2>>>(d_a,d_b,d_c,m,n);
-	// // per_column_row_kernel<<<grid1,block1>>>(d_a,d_b,d_c,m,n);
-	// cudaDeviceSynchronize();
-	// cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
-	// printMatrix(h_c, m, n);
+	gridDimx = ceil(float(n) / 1024);
+	dim3 grid2(gridDimx,1,1);
+	dim3 block2(32,32,1);
+	per_column_row_kernel<<<grid2,block2>>>(d_a,d_b,d_c,m,n);
+	cudaDeviceSynchronize();
+	cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
+	printMatrix(h_c, m, n);
 	// printMatrix(h_c, m, n,"kernel2.txt");
 
 	/**
@@ -163,13 +150,12 @@ int main(int argc,char **argv){
 	 * */
 	gridDimx = ceil(float(n) / 16);
 	gridDimy = ceil(float(m) / 64);
-	dim3 grid3(gridDimx, gridDimy, 1);
-	dim3 block3(64, 16, 1);
-	per_element_kernel<<<grid3, block3>>>(d_a, d_b, d_c, m, n);
+	dim3 grid3(gridDimx,gridDimy,1);
+	dim3 block3(64,16,1);
+	per_element_kernel<<<grid3,block3>>>(d_a,d_b,d_c,m,n);
 	cudaDeviceSynchronize();
 	cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
 	printMatrix(h_c, m, n);
 	// printMatrix(h_c, m, n,"kernel3.txt");
-
 	return 0;
 }
