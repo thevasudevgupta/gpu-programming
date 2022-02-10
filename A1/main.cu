@@ -128,9 +128,9 @@ int main(int argc,char **argv){
 	per_row_column_kernel<<<grid1,block1>>>(d_a,d_b,d_c,m,n);
 	cudaDeviceSynchronize();
 	cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
-	printMatrix(h_c, m, n);
-	// printMatrix(h_c, m, n,"kernel1.txt");
-	
+	// printMatrix(h_c, m, n);
+	printMatrix(h_c, m, n,"kernel1.txt");
+
 	/**
 	 * Kernel 2 - per_column_row_kernel
 	 * To be launched with 1D grid, 2D block
@@ -141,8 +141,8 @@ int main(int argc,char **argv){
 	per_column_row_kernel<<<grid2,block2>>>(d_a,d_b,d_c,m,n);
 	cudaDeviceSynchronize();
 	cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
-	printMatrix(h_c, m, n);
-	// printMatrix(h_c, m, n,"kernel2.txt");
+	// printMatrix(h_c, m, n);
+	printMatrix(h_c, m, n,"kernel2.txt");
 
 	/**
 	 * Kernel 3 - per_element_kernel
@@ -155,7 +155,7 @@ int main(int argc,char **argv){
 	per_element_kernel<<<grid3,block3>>>(d_a,d_b,d_c,m,n);
 	cudaDeviceSynchronize();
 	cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
-	printMatrix(h_c, m, n);
-	// printMatrix(h_c, m, n,"kernel3.txt");
+	// printMatrix(h_c, m, n);
+	printMatrix(h_c, m, n,"kernel3.txt");
 	return 0;
 }
