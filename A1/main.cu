@@ -1,3 +1,5 @@
+// nvcc main.cu && ./a.out < sample.txt
+
 #include <cuda.h>
 #include <bits/stdc++.h>
 #include <fstream>
@@ -5,9 +7,9 @@ using namespace std;
 
 ofstream outfile; //the handle for printing the output
 
-// 1, 2, 3		// 1, 2, 3
-// 5, 6, 7		// 5, 6, 7
-// 2, 4, 7		// 2, 4, 7
+// 1, 2, 3, 5		// 1, 2, 3
+// 5, 6, 7, 7		// 5, 6, 7
+// 2, 4, 7, 9		// 2, 4, 7
 
 // (1 * 1) + (2 * 5) + (3 * 2)
 // 
@@ -17,44 +19,55 @@ ofstream outfile; //the handle for printing the output
 
 // complete the following kernel...
 __global__ void per_row_column_kernel(long int *A, long int *B, long int *C, long int m, long int n){
-	// (A + B.T) * (B.T - A)
-	// (A * B.T) - (A * A) + (B.T * B.T) - (B.T * A)
-
 	int id = threadIdx.x + blockDim.x * blockIdx.x;
-	if (id >= m * n) { return; }
+	if (id >= m) { return; }
 	// lets use id as the row index for A or column index for B
-	printf("id: %d \n", id);
 
-	C[id] = 0; // initialize C to 0
-	for (long int i = 0; i < n; i++) {
-		// [i * n + j] == [i, j]
-
-		// c1 = A[id][i] * B[id][i]
-		// long int c1 = A[id * n + i] * B[id * n + i]; // A * B.T
-
-		// c2 = A[id][i] * A[i][id]
-		long int c2 = A[id * n + i] * A[i * n + id]; // A * A
-
-		// c3 = B[i][id] * B[id][i]
-		// long int c3 = B[i * n + id] * B[id * n + i]; // B.T * B.T
-
-		// c4 = B[i][id] * A[id][i]
-		// long int c4 = B[i * n + id] * A[id * n + i]; // B.T * A
-
-		// C[id] += c1 + c2 + c3 + c4;
-		C[id] += c2;
+	for (long int kk = 0; kk < n; kk++) {
+		long int value = (A[id * n + kk] + B[kk * m + id]) * (B[kk * m + id] - A[id * n + kk]);
+		C[id * n + kk] = value;
 	}
 }
 
+// (A + B.T) * (B.T - A)
+// A -> (m, n)
+// B -> (n, m)
+// C -> (m, n)
 
 // complete the following kernel...
 __global__ void per_column_row_kernel(long int *A, long int *B, long int *C,long int m, long int n){
+	// int id = threadIdx.x * blockDim.y + threadIdx.y //+ blockDim.x * blockIdx.x;
+	int id = blockIdx.x * blockDim.y * blockDim.x + threadIdx.x * blockDim.y + threadIdx.y;
+	// printf("id: %d\n", id);
+	if (id >= n) { return; }
+	// lets use id as the column index for A or column index for B
+	// printf("id: %d\n", id);
 
+	for (long int kk = 0; kk < m; kk++) {
+		long int value = (A[kk * n + id] + B[id * m + kk]) * (B[id * m + kk] - A[kk * n + id]);
+		C[kk * n + id] = value;
+	}
 }
+
+// int -> unsigned int
 
 // complete the following kernel...
 __global__ void per_element_kernel(long int *A, long int *B, long int *C,long int m, long int n){
+	int id = blockIdx.y * gridDim.x * blockDim.y * blockDim.x + blockIdx.x * blockDim.y * blockDim.x + threadIdx.x * blockDim.y + threadIdx.y;
+	if (id >= m * n) { return; }
+	// printf("id: %d\n", id);
+	// m = 3 ; n = 4
+	// 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
+	// (0, 0)
+	// (0, 1)
+	// (0, 2)
+	// (0, 0)
+	// 
 
+	int ii = id / n; // row index for A
+	int jj = id % m; // column index for A
+	long int value = (A[ii * n + jj] + B[jj * m + ii]) * (B[jj * m + ii] - A[ii * n + jj]);
+	C[ii * n + jj] = value;
 }
 
 /**
@@ -128,38 +141,41 @@ int main(int argc,char **argv){
 	 * To be launched with 1D grid, 1D block
 	 * */
 	// 10, 12
-	gridDimx = ceil(float(m) / 1024);
-	dim3 grid1(gridDimx, 1, 1);
-	dim3 block1(1024, 1, 1);
-	per_row_column_kernel<<<grid1, block1>>>(d_a, d_b, d_c, m, n);
-	cudaDeviceSynchronize();
-	cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
-	printMatrix(h_c, m, n);
+	// gridDimx = ceil(float(m) / 1024);
+	// dim3 grid1(gridDimx, 1, 1);
+	// dim3 block1(1024, 1, 1);
+	// per_row_column_kernel<<<grid1, block1>>>(d_a, d_b, d_c, m, n);
+	// cudaDeviceSynchronize();
+	// cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
+	// printMatrix(h_c, m, n);
 	// printMatrix(h_c, m, n, "kernel1.txt");
 
 	/**
 	 * Kernel 2 - per_column_row_kernel
 	 * To be launched with 1D grid, 2D block
 	 * */
-	// gridDimx = ceil(float(n) / 1024);
-	// dim3 grid2(gridDimx,1,1);
-	// dim3 block2(32,32,1);
-	// per_column_row_kernel<<<grid2,block2>>>(d_a,d_b,d_c,m,n);
+	// gridDimx = ceil(float(n) / 1024); // 1024 = 32 * 32
+	// dim3 grid2(gridDimx, 1, 1);
+	// dim3 block2(32, 32, 1);
+	// per_column_row_kernel<<<grid2, block2>>>(d_a,d_b,d_c,m,n);
+	// // per_column_row_kernel<<<grid1,block1>>>(d_a,d_b,d_c,m,n);
 	// cudaDeviceSynchronize();
 	// cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
+	// printMatrix(h_c, m, n);
 	// printMatrix(h_c, m, n,"kernel2.txt");
 
 	/**
 	 * Kernel 3 - per_element_kernel
 	 * To be launched with 2D grid, 2D block
 	 * */
-	// gridDimx = ceil(float(n) / 16);
-	// gridDimy = ceil(float(m) / 64);
-	// dim3 grid3(gridDimx,gridDimy,1);
-	// dim3 block3(64,16,1);
-	// per_element_kernel<<<grid3,block3>>>(d_a,d_b,d_c,m,n);
-	// cudaDeviceSynchronize();
-	// cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
+	gridDimx = ceil(float(n) / 16);
+	gridDimy = ceil(float(m) / 64);
+	dim3 grid3(gridDimx, gridDimy, 1);
+	dim3 block3(64, 16, 1);
+	per_element_kernel<<<grid3, block3>>>(d_a, d_b, d_c, m, n);
+	cudaDeviceSynchronize();
+	cudaMemcpy(h_c, d_c, m * n * sizeof(long int), cudaMemcpyDeviceToHost);
+	printMatrix(h_c, m, n);
 	// printMatrix(h_c, m, n,"kernel3.txt");
 
 	return 0;
