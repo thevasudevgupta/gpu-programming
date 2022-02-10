@@ -56,18 +56,11 @@ __global__ void per_element_kernel(long int *A, long int *B, long int *C,long in
 	int id = blockIdx.y * gridDim.x * blockDim.y * blockDim.x + blockIdx.x * blockDim.y * blockDim.x + threadIdx.x * blockDim.y + threadIdx.y;
 	if (id >= m * n) { return; }
 	// printf("id: %d\n", id);
-	// m = 3 ; n = 4
-	// 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11
-	// (0, 0)
-	// (0, 1)
-	// (0, 2)
-	// (0, 0)
-	// 
 
 	int ii = id / n; // row index for A
-	int jj = id % m; // column index for A
+	int jj = id % n; // column index for A
 	long int value = (A[ii * n + jj] + B[jj * m + ii]) * (B[jj * m + ii] - A[ii * n + jj]);
-	C[ii * n + jj] = value;
+	C[id] = value;
 }
 
 /**
