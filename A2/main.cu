@@ -3,18 +3,43 @@
 #include<cuda.h>
 using namespace std;
 
+#define BLOCK_SIZE 32;
 
 // write kernels here...
-__global__ void transpose_(int *A) {
+__global__ void transpose(int *A, int *X, int a, int b) {
+	// A -> a x b
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id >= a * b) { return; }
+	int ii = id / b;
+	int jj = id / a;
 
+	X[jj * a + ii] = A[ii * b + jj];
 }
 
-__global__ void matmul(int *A, int *B, int *X) {
 
+__global__ void matmul_after_transpose_B(int *A, int *B, int *X, int a, int b, int c) {
+	// fully coelesced!
+	// A -> a x b
+	// B -> c x b
+	// X -> a x c
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id >= a * c) { return; }
+
+	int ii = id / c;
+	int jj = id % c;
+
+	X[ii * c + jj] = 0;
+	for (int kk = 0; kk < a; kk++) {
+		X[ii * c + jj] += A[ii * b + kk] * B[jj * b + kk];
+	}
 }
 
-__global__ void add(int *A, int *B, int *X) {
 
+__global__ void add_(int *A, int *B, int a, int b) {
+	// A = A + B
+	int id = blockIdx.x * blockDim.x + threadIdx.x;
+	if (id >= a * b) { return; }
+	A[id] += B[id];
 }
 
 // A -> p x q
@@ -22,9 +47,6 @@ __global__ void add(int *A, int *B, int *X) {
 // C -> q x r
 // D -> s x r
 // X -> p x s
-
-// p x q
-// p x r
 
 // function to compute the output matrix
 void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB, 
@@ -37,8 +59,6 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 	cudaMalloc(&d_matrixB, q * p * sizeof(int));
 	cudaMalloc(&d_matrixC, q * r * sizeof(int));
 	cudaMalloc(&d_matrixD, s * r * sizeof(int));
-	cudaMalloc(&d_matrixX, p * s * sizeof(int));
-	cudaMalloc(&tmp_d_matrix, p * max(q, r) * sizeof(int));
 
 	// copy the values...
 	cudaMemcpy(d_matrixA, h_matrixA, p * q * sizeof(int), cudaMemcpyHostToDevice);
@@ -47,12 +67,41 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 	cudaMemcpy(d_matrixD, h_matrixD, s * r * sizeof(int), cudaMemcpyHostToDevice);
 
 	// call the kernels for doing required computations...
-	transpose_<<<, >>>(d_matrixB); // B -> B.T
-	transpose_<<<, >>>(d_matrixD); // D -> D.T
-	add<<<, >>>(d_matrixA, d_matrixB, tmp_d_matrix); // A + B.T
-	copy_<<<, >>>(tmp_d_matrix, d_matrixA);
-	matmul<<<, >>>(d_matrixA, d_matrixC, tmp_d_matrix); // (A + B.T) @ C
-	matmul<<<, >>>(tmp_d_matrix, d_matrixD, d_matrixX); // (A + B.T) @ C @ D.T
+
+	// C @ D.T
+	// memory for storing intermediate states
+	cudaMalloc(&C_DT, q * s * sizeof(int));
+	int num_blocks = ceil(float(q * s) / BLOCK_SIZE);
+	matmul_after_transpose_B<<<num_blocks, BLOCK_SIZE>>>(d_matrixC, d_matrixD, C_DT, q, r, s);
+	cudaDeviceSynchronize();
+
+	// memory for storing intermediate states
+	cudaMalloc(&temp_d_matrix, max(p * q, q * s) * sizeof(int));
+
+	// A = A + B.T
+	int num_blocks = ceil(float(p * q) / BLOCK_SIZE);
+	transpose<<<num_blocks, BLOCK_SIZE>>>(d_matrixB, temp_d_matrix, q, p); // B -> B.T
+	// temp_d_matrix -> p, q
+	add_<<<num_blocks, BLOCK_SIZE>>>(d_matrixA, temp_d_matrix, p, q);
+	cudaDeviceSynchronize();
+
+	// d_matrixB is useless now
+	cudaFree(d_matrixB);
+
+	// temp_d_matrix is useless now
+	// let's reuse temp_d_matrix for storing transpose of C_DT
+	int num_blocks = ceil(float(s * q) / BLOCK_SIZE);
+	transpose<<<num_blocks, BLOCK_SIZE>>>(C_DT, temp_d_matrix, q, s); // C_DT -> C_DT.T
+	cudaDeviceSynchronize();
+	// temp_d_matrix -> s, q
+
+	// C_DT is useless now as we have stored it's transpose in temp_d_matrix
+	cudaFree(C_DT);
+	cudaMalloc(&d_matrixX, p * s * sizeof(int));
+
+	// (A + B.T) @ C @ D.T
+	int num_blocks = ceil(float(p * s) / BLOCK_SIZE);
+	matmul_after_transpose_B<<<num_blocks, BLOCK_SIZE>>>(d_matrixA, temp_d_matrix, d_matrixX, p, q, s);
 	cudaDeviceSynchronize();
 
 	// copy the result back...
@@ -64,7 +113,6 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 	cudaFree(d_matrixC);
 	cudaFree(d_matrixD);
 	cudaFree(d_matrixX);
-	cudaFree(tmp_d_matrix);
 }
 
 // function to read the input matrices from the input file
