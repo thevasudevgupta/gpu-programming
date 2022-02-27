@@ -11,7 +11,7 @@ __global__ void transpose(int *A, int *X, int a, int b) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id >= a * b) { return; }
 	int ii = id / b;
-	int jj = id / a;
+	int jj = id % b;
 
 	X[jj * a + ii] = A[ii * b + jj];
 }
@@ -29,7 +29,7 @@ __global__ void matmul_after_transpose_B(int *A, int *B, int *X, int a, int b, i
 	int jj = id % c;
 
 	X[ii * c + jj] = 0;
-	for (int kk = 0; kk < a; kk++) {
+	for (int kk = 0; kk < b; kk++) {
 		X[ii * c + jj] += A[ii * b + kk] * B[jj * b + kk];
 	}
 }
@@ -40,6 +40,19 @@ __global__ void add_(int *A, int *B, int a, int b) {
 	int id = blockIdx.x * blockDim.x + threadIdx.x;
 	if (id >= a * b) { return; }
 	A[id] += B[id];
+}
+
+
+void transfer_to_host_and_print(int *d_matrix, int m, int n) {
+	
+	int *h_matrix = (int *) malloc(m * n * sizeof(int));
+	cudaMemcpy(h_matrix, d_matrix, m * n * sizeof(int), cudaMemcpyDeviceToHost);
+	for (int i = 0; i < m; i++) {
+		for (int j = 0; j < n; j++) {
+			cout << h_matrix[i * n + j] << " ";
+		}
+		cout << endl;
+	}
 }
 
 // A -> p x q
@@ -77,19 +90,22 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 	num_blocks = ceil(float(q * s) / 1024);
 	matmul_after_transpose_B<<<num_blocks, 1024>>>(d_matrixC, d_matrixD, C_DT, q, r, s);
 	cudaDeviceSynchronize();
+	// transfer_to_host_and_print(C_DT, q, s);
 
-	// // memory for storing intermediate states
+	// // // memory for storing intermediate states
 	int *temp_d_matrix;
 	cudaMalloc(&temp_d_matrix, max(p * q, q * s) * sizeof(int));
 
-	// // A = A + B.T
+	// // // A = A + B.T
 	num_blocks = ceil((float)(p * q) / 1024);
 	transpose<<<num_blocks, 1024>>>(d_matrixB, temp_d_matrix, q, p); // B -> B.T
+	// transfer_to_host_and_print(temp_d_matrix, p, q);
 	// temp_d_matrix -> p, q
 	add_<<<num_blocks, 1024>>>(d_matrixA, temp_d_matrix, p, q);
 	cudaDeviceSynchronize();
+	// transfer_to_host_and_print(d_matrixA, p, q);
 
-	// d_matrixB is useless now
+	// // d_matrixB is useless now
 	cudaFree(d_matrixB);
 
 	// temp_d_matrix is useless now
@@ -97,16 +113,24 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 	num_blocks = ceil((float)(s * q) / 1024);
 	transpose<<<num_blocks, 1024>>>(C_DT, temp_d_matrix, q, s); // C_DT -> C_DT.T
 	cudaDeviceSynchronize();
+	// transfer_to_host_and_print(temp_d_matrix, s, q);
 	// temp_d_matrix -> s, q
 
 	// C_DT is useless now as we have stored it's transpose in temp_d_matrix
 	cudaFree(C_DT);
 	cudaMalloc(&d_matrixX, p * s * sizeof(int));
 
-	// (A + B.T) @ C @ D.T
+	// transfer_to_host_and_print(d_matrixA, p, q);
+	// cout << endl;
+	// transfer_to_host_and_print(temp_d_matrix, s, q);
+
+	// // (A + B.T) @ C @ D.T
 	num_blocks = ceil((float)(p * s) / 1024);
 	matmul_after_transpose_B<<<num_blocks, 1024>>>(d_matrixA, temp_d_matrix, d_matrixX, p, q, s);
 	cudaDeviceSynchronize();
+
+	// cout << endl;
+	transfer_to_host_and_print(d_matrixX, p, s);
 
 	// copy the result back...
 	cudaMemcpy(h_matrixX, d_matrixX, p * s * sizeof(int), cudaMemcpyDeviceToHost);
@@ -118,6 +142,7 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 	cudaFree(d_matrixD);
 	cudaFree(d_matrixX);
 }
+
 
 // function to read the input matrices from the input file
 void readMatrix(FILE *inputFilePtr, int *matrix, int rows, int cols) {
