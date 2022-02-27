@@ -1,9 +1,9 @@
+// nvcc main.cu && ./a.out evaluation-script/testcases/input/input1.txt output.txt
+
 #include<iostream>
 #include<sys/time.h>
 #include<cuda.h>
 using namespace std;
-
-#define BLOCK_SIZE 32;
 
 // write kernels here...
 __global__ void transpose(int *A, int *X, int a, int b) {
@@ -53,6 +53,7 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 	         int *h_matrixC, int *h_matrixD, int *h_matrixX) {
 	// variable declarations...
 	int *d_matrixA, *d_matrixB, *d_matrixC, *d_matrixD, *d_matrixX;
+	int num_blocks;
 
 	// allocate memory...
 	cudaMalloc(&d_matrixA, p * q * sizeof(int));
@@ -70,19 +71,22 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 
 	// C @ D.T
 	// memory for storing intermediate states
+	int *C_DT;
 	cudaMalloc(&C_DT, q * s * sizeof(int));
-	int num_blocks = ceil(float(q * s) / BLOCK_SIZE);
-	matmul_after_transpose_B<<<num_blocks, BLOCK_SIZE>>>(d_matrixC, d_matrixD, C_DT, q, r, s);
+
+	num_blocks = ceil(float(q * s) / 1024);
+	matmul_after_transpose_B<<<num_blocks, 1024>>>(d_matrixC, d_matrixD, C_DT, q, r, s);
 	cudaDeviceSynchronize();
 
-	// memory for storing intermediate states
+	// // memory for storing intermediate states
+	int *temp_d_matrix;
 	cudaMalloc(&temp_d_matrix, max(p * q, q * s) * sizeof(int));
 
-	// A = A + B.T
-	int num_blocks = ceil(float(p * q) / BLOCK_SIZE);
-	transpose<<<num_blocks, BLOCK_SIZE>>>(d_matrixB, temp_d_matrix, q, p); // B -> B.T
+	// // A = A + B.T
+	num_blocks = ceil((float)(p * q) / 1024);
+	transpose<<<num_blocks, 1024>>>(d_matrixB, temp_d_matrix, q, p); // B -> B.T
 	// temp_d_matrix -> p, q
-	add_<<<num_blocks, BLOCK_SIZE>>>(d_matrixA, temp_d_matrix, p, q);
+	add_<<<num_blocks, 1024>>>(d_matrixA, temp_d_matrix, p, q);
 	cudaDeviceSynchronize();
 
 	// d_matrixB is useless now
@@ -90,8 +94,8 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 
 	// temp_d_matrix is useless now
 	// let's reuse temp_d_matrix for storing transpose of C_DT
-	int num_blocks = ceil(float(s * q) / BLOCK_SIZE);
-	transpose<<<num_blocks, BLOCK_SIZE>>>(C_DT, temp_d_matrix, q, s); // C_DT -> C_DT.T
+	num_blocks = ceil((float)(s * q) / 1024);
+	transpose<<<num_blocks, 1024>>>(C_DT, temp_d_matrix, q, s); // C_DT -> C_DT.T
 	cudaDeviceSynchronize();
 	// temp_d_matrix -> s, q
 
@@ -100,8 +104,8 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 	cudaMalloc(&d_matrixX, p * s * sizeof(int));
 
 	// (A + B.T) @ C @ D.T
-	int num_blocks = ceil(float(p * s) / BLOCK_SIZE);
-	matmul_after_transpose_B<<<num_blocks, BLOCK_SIZE>>>(d_matrixA, temp_d_matrix, d_matrixX, p, q, s);
+	num_blocks = ceil((float)(p * s) / 1024);
+	matmul_after_transpose_B<<<num_blocks, 1024>>>(d_matrixA, temp_d_matrix, d_matrixX, p, q, s);
 	cudaDeviceSynchronize();
 
 	// copy the result back...
