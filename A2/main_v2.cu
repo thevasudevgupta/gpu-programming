@@ -4,9 +4,6 @@
 #include<sys/time.h>
 #include<cuda.h>
 
-// must be equal to number of threads in a warp
-#define TILESIZE 32
-
 using namespace std;
 
 // write kernels here...
@@ -30,27 +27,26 @@ __global__ void matmul(int *A, int *B, int *X, int a, int b, int c) {
 
 	int ii = id / c;
 	int jj = id % c;
-	// shared memory is limited and hence fetching only TILESIZE elements in shared memory
-	__shared__ int A_shared[TILESIZE];
-
-	// TODO: handle cases when TILESIZE is more than number of columsn in A
+	
+	// TODO: discussion
+	// we can possibly fetch a tile into shared memory instead of just one element
+	// woult it result in speed up??
+	__shared__ int a_shared;
 
 	X[ii * c + jj] = 0;
 	for (int kk = 0; kk < b; kk++) {
 
 		// A -> not coalesced (usage of shared memory possible)
-		// thread-0, 1, ..., 31 are accessing 1st row of A only
+		// thread-0, 1, ..., (c-1) are accessing 1st row of A only
 
 		// thread divergence will happen
-		if (kk % TILESIZE == 0 && threadIdx.x % TILESIZE == 0) {
-			for (int i = 0; i < TILESIZE; i++) {
-				A_shared[i + kk] = A[i + kk];
-			}
+		if (threadIdx.x % c == 0) {
+			a_shared = A[ii * b + kk]
 		}
 		// we can't allow thread across warp to move without fetching data into shared memory
 		__syncthreads();
 
-		X[ii * c + jj] += A_shared[ii * b + kk] * B[kk * c + jj];
+		X[ii * c + jj] += a_shared * B[kk * c + jj];
 		// X -> fully memory coalesced
 		// B -> fully memory coalesced
 	}
@@ -103,23 +99,26 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 	cudaMemcpy(d_matrixC, h_matrixC, q * r * sizeof(int), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_matrixD, h_matrixD, s * r * sizeof(int), cudaMemcpyHostToDevice);
 
+	// memory for storing intermediate states of transpose
+	int *temp_d_matrix;
+	cudaMalloc(&temp_d_matrix, max(s * r, p * q) * sizeof(int));
+
 	// call the kernels for doing required computations...
 
-	// C @ D.T
-	// memory for storing intermediate states
+	// compute D.T and store it in temp_d_matrix
+	transpose<<<num_blocks, 1024>>>(d_matrixD, temp_d_matrix, s, r); 
+
+	// memory for storing intermediate states of C @ D.T
 	int *C_DT;
 	cudaMalloc(&C_DT, q * s * sizeof(int));
 
+	// compute C@D.T and store it in C_DT
 	num_blocks = ceil(float(q * s) / 1024);
-	matmul_after_transpose_B<<<num_blocks, 1024>>>(d_matrixC, d_matrixD, C_DT, q, r, s);
+	matmul<<<num_blocks, 1024>>>(d_matrixC, temp_d_matrix, C_DT, q, r, s);
 	cudaDeviceSynchronize();
 	// transfer_to_host_and_print(C_DT, q, s);
 
-	// // // memory for storing intermediate states
-	int *temp_d_matrix;
-	cudaMalloc(&temp_d_matrix, max(p * q, q * s) * sizeof(int));
-
-	// // // A = A + B.T
+	// A = A + B.T
 	num_blocks = ceil((float)(p * q) / 1024);
 	transpose<<<num_blocks, 1024>>>(d_matrixB, temp_d_matrix, q, p); // B -> B.T
 	// transfer_to_host_and_print(temp_d_matrix, p, q);
@@ -127,9 +126,6 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 	add_<<<num_blocks, 1024>>>(d_matrixA, temp_d_matrix, p, q);
 	cudaDeviceSynchronize();
 	// transfer_to_host_and_print(d_matrixA, p, q);
-
-	// // d_matrixB is useless now
-	cudaFree(d_matrixB);
 
 	// temp_d_matrix is useless now
 	// let's reuse temp_d_matrix for storing transpose of C_DT
@@ -139,17 +135,15 @@ void compute(int p, int q, int r, int s, int *h_matrixA, int *h_matrixB,
 	// transfer_to_host_and_print(temp_d_matrix, s, q);
 	// temp_d_matrix -> s, q
 
-	// C_DT is useless now as we have stored it's transpose in temp_d_matrix
-	cudaFree(C_DT);
 	cudaMalloc(&d_matrixX, p * s * sizeof(int));
 
 	// transfer_to_host_and_print(d_matrixA, p, q);
 	// cout << endl;
 	// transfer_to_host_and_print(temp_d_matrix, s, q);
 
-	// // (A + B.T) @ C @ D.T
+	// (A + B.T) @ C @ D.T
 	num_blocks = ceil((float)(p * s) / 1024);
-	matmul_after_transpose_B<<<num_blocks, 1024>>>(d_matrixA, temp_d_matrix, d_matrixX, p, q, s);
+	matmul<<<num_blocks, 1024>>>(d_matrixA, C_DT, d_matrixX, p, q, s);
 	cudaDeviceSynchronize();
 
 	// cout << endl;
