@@ -1,8 +1,14 @@
-import numpy as np
+target_path = "evaluation-script/testcases/output/output3.txt"
+result_path = "output.txt"
 
-C = np.array([[1, 9, 6], [-6, 7, 2], [2, 4, -3]])
-D = np.array([[10, 0, 5], [1, 3, -3]])
-print(C@D.T)
+with open(target_path) as f:
+    target = f.read()
 
-addn = np.array([[8, 1, 1], [4, 0, 4]])
-print(addn@(C@D.T))
+with open(result_path) as f:
+    result = f.read()
+
+# print(target.split())
+# print(result.split())
+
+assert target.split() == result.split(), f"\ntarget: {target}\nresult: {result}"
+print("SUCCESSFUL !!")
