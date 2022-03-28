@@ -18,17 +18,8 @@ int find_useful_core(int p, int *priority_hashmap, int m, int *core_free_status)
         else { core_idx = idx; }
     }
     else {
-        // printf("yayyy %d\n", core_free_status[core_idx]);
         if (core_free_status[core_idx] == 1) { core_idx = -1; }
     }
-
-    // cout << "core free status: ";
-    // for (int i = 0; i < m; i++) { cout << core_free_status[i] << " "; }
-    // cout << endl;
-    // cout << "priority to core: ";
-    // for (int i = 0; i < m; i++) { cout << priority_hashmap[i] << " "; }
-    // cout << endl;
-
     return core_idx;
 }
 
@@ -63,11 +54,7 @@ void operations (int m, int n, int *executionTime, int *priority, int *result)  
         if (t > timeout) { break; }
         printf("t=%d :: ", t);
 
-        // for (int i = 0; i < n; i++) { cout << task_core_mapping[i] << " "; }
-        // cout << endl;
-
         int p = priority[task_idx];
-        // cout << "task_idx = " << task_idx << endl;
 
         if (time_updated) {
             for (int i = 0; i < task_idx; i++) {
@@ -79,7 +66,6 @@ void operations (int m, int n, int *executionTime, int *priority, int *result)  
         }
 
         int core_idx = find_useful_core(p, priority_hashmap, m, core_free_status);
-        // cout << "core_idx = " << core_idx << endl;
 
         // no core is available
         // task has to be blocked until free core becomes available
@@ -95,10 +81,6 @@ void operations (int m, int n, int *executionTime, int *priority, int *result)  
         // core is busy now!
         core_free_status[core_idx] = 1;
         task_core_mapping[task_idx] = core_idx;
-
-        // cout << "core free status: ";
-        // for (int i = 0; i < m; i++) { cout << core_free_status[i] << " "; }
-        // cout << endl;
 
         // priority should be mapped to this core now!
         if (priority_hashmap[p] == -1) {
