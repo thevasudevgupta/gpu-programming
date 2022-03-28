@@ -18,6 +18,7 @@ int find_useful_core(int p, int *priority_hashmap, int m, int *core_free_status)
         else { core_idx = idx; }
     }
     else {
+        // printf("yayyy %d\n", core_free_status[core_idx]);
         if (core_free_status[core_idx] == 1) { core_idx = -1; }
     }
 
@@ -55,22 +56,25 @@ void operations (int m, int n, int *executionTime, int *priority, int *result)  
     int timeout = 0;
     for (int i = 0; i < n; i++) { timeout += executionTime[i]; }
 
+    bool time_updated = false;
     int t = 0;
     int task_idx = 0;
     while (true) {
         if (t > timeout) { break; }
-        printf("t=%d\n", t);
-        
+        printf("t=%d :: ", t);
+
         // for (int i = 0; i < n; i++) { cout << task_core_mapping[i] << " "; }
         // cout << endl;
 
         int p = priority[task_idx];
         // cout << "task_idx = " << task_idx << endl;
 
-        for (int i = 0; i < task_idx; i++) {
-            if (t == tasks_start_time[i] + executionTime[i]) {
-                // cout << "inside" << endl;
-                core_free_status[task_core_mapping[i]] = 0;
+        if (time_updated) {
+            for (int i = 0; i < task_idx; i++) {
+                if (t == tasks_start_time[i] + executionTime[i]) {
+                    // cout << "inside" << endl;
+                    core_free_status[task_core_mapping[i]] = 0;
+                }
             }
         }
 
@@ -81,6 +85,7 @@ void operations (int m, int n, int *executionTime, int *priority, int *result)  
         // task has to be blocked until free core becomes available
         if (core_idx == -1) {
             t++;
+            time_updated = true;
             printf("doing nothing!!\n");
             continue;
         }
@@ -91,6 +96,10 @@ void operations (int m, int n, int *executionTime, int *priority, int *result)  
         core_free_status[core_idx] = 1;
         task_core_mapping[task_idx] = core_idx;
 
+        // cout << "core free status: ";
+        // for (int i = 0; i < m; i++) { cout << core_free_status[i] << " "; }
+        // cout << endl;
+
         // priority should be mapped to this core now!
         if (priority_hashmap[p] == -1) {
             priority_hashmap[p] = core_idx;
@@ -99,6 +108,7 @@ void operations (int m, int n, int *executionTime, int *priority, int *result)  
         tasks_start_time[task_idx] = t;
 
         task_idx++;
+        time_updated = false;
 
         // once all tasks are scheduled and result is computed, we can stop the script
         if (task_idx == n) { break; }
