@@ -8,6 +8,27 @@
 // //Complete the following function
 // void operations ( int m, int n, int *executionTime, int *priority, int *result )  {
 
+    // // allocating memory on GPU
+    // int *d_executionTime, *d_priority, *d_result;
+    // cudaMalloc(&d_executionTime, n * sizeof(int));
+    // cudaMalloc(&d_priority, n * sizeof(int));
+    // cudaMalloc(&result, n * sizeof(int));
+
+    // // copy arrays from CPU to GPU
+    // cudaMemcpy(d_executionTime, executionTime, n * sizeof(int), cudaMemcpyHostToDevice);
+    // cudaMemcpy(d_priority, priority, n * sizeof(int), cudaMemcpyHostToDevice);
+
+
+
+
+
+    // // copy results back to host
+    // cudaMemcpy(result, d_result, n * sizeof(int), cudaMemcpyDeviceToHost);
+
+    // cudaFree(d_executionTime);
+    // cudaFree(d_priority);
+    // cudaFree(d_result);
+
 // }
 
 // int main(int argc,char **argv)
