@@ -70,10 +70,6 @@ int find_useful_core(int p, int *priority_to_core_map, int m, int *core_free_sta
 // how to make the cores free?
 // make the core free only when you want to schedule the task
 
-__global__ void find_min_available_core() {
-    
-}
-
 // for any task
 // find useful core
 // if that core is free
@@ -83,6 +79,11 @@ __global__ void find_min_available_core() {
     // ans: ans-for-that-task + execution time
 
 // TODO: think if code would work incase threads belong to same warp
+// TODO: think how to release the core once task is executed
+
+
+// [0, 0, 0, 0, 0]
+// [1, 0, 0, 0, 0]
 
 __global__ void simulate(int *task_schedule_status, int *executionTime, int *priority, int *priority_to_core_map, int *tasks_start_time, int *result, int n) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -95,42 +96,44 @@ __global__ void simulate(int *task_schedule_status, int *executionTime, int *pri
 
     // task is not allocated any core yet! let's allocate core then!
     if (core_idx == -1) {
-        core_idx = find_min_available_core(); // TODO: finish this!!
+
+        // find available core with min core idx
+        int tmp_core_idx = 0;
+        while (tmp_core_idx < m && core_free_status[tmp_core_idx] == 1) { tmp_core_idx += 1; }
+        if (tmp_core_idx > m) { core_idx = -1; }
+        else { core_idx = tmp_core_idx; }
 
         priority_to_core_map[priority[idx]] = core_idx;
     }
-    // otherwise: whather core idx we get, task should be executed on that!
+    // otherwise: whether core idx we get, task should be executed on that!
+
+    core_to_task[core_idx] = task_idx;
 
     // core idx would be some no between 0 ... N-1
     // it indicates the core on which task must be executed
 
     // if that core is free => ans: previous task start time + current task execution time
-    if (idx == 0) {
-        result[idx] = 0 + executionTime[idx]
+    if (core_free_status[core_idx] == 0) {
+        if (idx == 0) { tasks_start_time[idx] = 0; }
+        else { tasks_start_time[idx] = tasks_start_time[idx - 1]; }        
     }
     else {
-        if (core_free_status[core_idx] == 0) {
-            result[idx] = tasks_start_time[idx - 1] + executionTime[idx]
-        }
-        else {
-            // otherwise => find which task is executing on that core
-            // => ans: ans-for-that-task + current task execution time
-
-            result[idx] = result[core_to_task[core_idx]] + executionTime[idx]
-        }
+        // otherwise => find which task is executing on that core
+        // => ans: ans-for-that-task + current task execution time
+        tasks_start_time[idx] = result[core_to_task[core_idx]];
     }
+
+    result[idx] = tasks_start_time[idx] + executionTime[idx];
     // we want all the tasks to wait until that core is free
 
     task_schedule_status[idx] = 1; // unlock next thread
-
-    // result[idx] = tasks_start_time[idx] + executionTime[idx];
+    core_free_status[core_idx] = 1;
 }
 
 // 0 -> task is not scheduled yet
 // 1 -> task has been scheduled
 int volatile *task_schedule_status
-num_blocks = ceil(float(n) / 1024);
-initialize<<<num_blocks, 1024>>>(task_schedule_status, n, 0);
+initialize<<<n, 1>>>(task_schedule_status, n, 0);
 
 // [0, 0, 0, 0]
 // all threads should be locked untill previous task is scheduled
