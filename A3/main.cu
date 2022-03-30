@@ -11,39 +11,19 @@ using namespace std;
 // result
 // some tracker deciding which thread to block
 
-// // what to do in code?
-
-
-int find_useful_core(int p, int *priority_hashmap, int m, int *core_free_status) {
-    int core_idx = priority_hashmap[p];
-
-    // core is not mapped yet!
-    if (core_idx == -1) {
-        int idx = 0;
-        while (idx < m && core_free_status[idx] == 1) { idx += 1; }
-
-        // when no core is free
-        if (idx > m) { core_idx = -1; }
-        else { core_idx = idx; }
-    }
-    else {
-        if (core_free_status[core_idx] == 1) { core_idx = -1; }
-    }
-    return core_idx;
-}
-
-
-__global__ void(int size, int *A, int *B, int *C) {
+__global__ void fill_sum(int size, int *A, int *B, int *C) {
     // A = B + C
     idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size) { A[idx] = B[idx] + C[idx]; }
 }
+
 
 __global__ void initialize(int *array, int size, int value) {
     // array[i] = value
     idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size) { array[idx] = value; }
 }
+
 
 void initialize_state(int *d_tasks_start_time, int *d_priority_hashmap, int *d_core_free_status, int *d_task_core_mapping, int m, int n) {
     cudaMalloc(&d_tasks_start_time, n * sizeof(int));
@@ -63,7 +43,104 @@ void initialize_state(int *d_tasks_start_time, int *d_priority_hashmap, int *d_c
 }
 
 
-__global__ void simulate() {
+int find_useful_core(int p, int *priority_to_core_map, int m, int *core_free_status) {
+    int core_idx = priority_to_core_map[p];
+
+    // core is not mapped yet!
+    if (core_idx == -1) {
+        int idx = 0;
+        while (idx < m && core_free_status[idx] == 1) { idx += 1; }
+
+        // when no core is free
+        if (idx > m) { core_idx = -1; }
+        else { core_idx = idx; }
+    }
+    else {
+        if (core_free_status[core_idx] == 1) { core_idx = -1; }
+    }
+    return core_idx;
+}
+
+
+// mantain the state of what of tasks are already scheduled?
+// [0, 0, 0, 0, 0] -> [1, 0, 0, 0, 0] -> [1, 1, 0, 0, 0] -> ...
+// next tasks is going to get scheduled only when previous task is already scheduled
+// + if the core is free
+
+// how to make the cores free?
+// make the core free only when you want to schedule the task
+
+__global__ void find_min_available_core() {
+    
+}
+
+// for any task
+// find useful core
+// if that core is free
+    // ans: previous task start time + execution time
+// otherwise
+    // find which task is executing on that core
+    // ans: ans-for-that-task + execution time
+
+// TODO: think if code would work incase threads belong to same warp
+
+__global__ void simulate(int *task_schedule_status, int *executionTime, int *priority, int *priority_to_core_map, int *tasks_start_time, int *result, int n) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx > n) { return; }
+
+    // current task can't execute untill the previous task is already scheduled
+    while (idx > 0 && task_schedule_status[idx - 1] == 0) ;
+
+    int core_idx = priority_to_core_map[priority[idx]]
+
+    // task is not allocated any core yet! let's allocate core then!
+    if (core_idx == -1) {
+        core_idx = find_min_available_core(); // TODO: finish this!!
+
+        priority_to_core_map[priority[idx]] = core_idx;
+    }
+    // otherwise: whather core idx we get, task should be executed on that!
+
+    // core idx would be some no between 0 ... N-1
+    // it indicates the core on which task must be executed
+
+    // if that core is free => ans: previous task start time + current task execution time
+    if (idx == 0) {
+        result[idx] = 0 + executionTime[idx]
+    }
+    else {
+        if (core_free_status[core_idx] == 0) {
+            result[idx] = tasks_start_time[idx - 1] + executionTime[idx]
+        }
+        else {
+            // otherwise => find which task is executing on that core
+            // => ans: ans-for-that-task + current task execution time
+
+            result[idx] = result[core_to_task[core_idx]] + executionTime[idx]
+        }
+    }
+    // we want all the tasks to wait until that core is free
+
+    task_schedule_status[idx] = 1; // unlock next thread
+
+    // result[idx] = tasks_start_time[idx] + executionTime[idx];
+}
+
+// 0 -> task is not scheduled yet
+// 1 -> task has been scheduled
+int volatile *task_schedule_status
+num_blocks = ceil(float(n) / 1024);
+initialize<<<num_blocks, 1024>>>(task_schedule_status, n, 0);
+
+// [0, 0, 0, 0]
+// all threads should be locked untill previous task is scheduled
+
+// [1, 0, 0, 0]
+
+num_blocks = ceil(float(n) / 1024);
+simulate<<<num_blocks, 1024>>>();
+
+void simulate() {
     // 
     int timeout = 0;
     for (int i = 0; i < n; i++) { timeout += executionTime[i]; }
@@ -86,7 +163,7 @@ __global__ void simulate() {
             }
         }
 
-        int core_idx = find_useful_core(p, priority_hashmap, m, core_free_status);
+        int core_idx = find_useful_core(p, priority_to_core_map, m, core_free_status);
 
         // no core is available
         // task has to be blocked until free core becomes available
@@ -104,8 +181,8 @@ __global__ void simulate() {
         task_core_mapping[task_idx] = core_idx;
 
         // priority should be mapped to this core now!
-        if (priority_hashmap[p] == -1) {
-            priority_hashmap[p] = core_idx;
+        if (priority_to_core_map[p] == -1) {
+            priority_to_core_map[p] = core_idx;
         }
 
         tasks_start_time[task_idx] = t;
@@ -161,8 +238,6 @@ void operations ( int m, int n, int *executionTime, int *priority, int *result )
     cudaFree(d_priority);
     cudaFree(d_result);
 }
-
-
 
 
 int main(int argc,char **argv)
