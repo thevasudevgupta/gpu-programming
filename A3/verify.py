@@ -12,6 +12,6 @@ with open(f2) as f2:
 # assert data1 == data2, f"{data1}\n{data2}"
 for i in range(len(data1)):
     if data1[i] != data2[i]:
-        print(f"test case failed at index-{i}")
+        print(f"❌ test case failed at index-{i}")
         exit()
-print("test case passed!!")
+print("✅ test case passed!!")

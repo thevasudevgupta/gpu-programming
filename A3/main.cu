@@ -44,13 +44,13 @@ __global__ void simulate(volatile int *task_schedule_status, int *priority, int 
     }
 
     if (core_free_status[core_idx] == 1) {
-        printf("core free status BEFORE ");
-        for (int i = 0; i < m; i++) {
-            printf("%d ", core_free_status[i]);
-        }
-        printf("\n");
+        // printf("core free status BEFORE ");
+        // for (int i = 0; i < m; i++) {
+        //     printf("%d ", core_free_status[i]);
+        // }
+        // printf("\n");
 
-        t = result[idx - 1];
+        t = core_busy_time[core_idx];
 
         // free the cores whenever needed
         for (int i = 0; i < m; i++) {
@@ -59,11 +59,11 @@ __global__ void simulate(volatile int *task_schedule_status, int *priority, int 
             }
         }
 
-        printf("core free status AFTER ");
-        for (int i = 0; i < m; i++) {
-            printf("%d ", core_free_status[i]);
-        }
-        printf("\n");
+        // printf("core free status AFTER ");
+        // for (int i = 0; i < m; i++) {
+        //     printf("%d ", core_free_status[i]);
+        // }
+        // printf("\n");
     }
 
     // otherwise: whether core idx we get, task should be executed on that!
