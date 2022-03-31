@@ -52,7 +52,7 @@ void operations (int m, int n, int *executionTime, int *priority, int *result)  
     int task_idx = 0;
     while (true) {
         if (t > timeout) { break; }
-        printf("t=%d :: ", t);
+        // printf("t=%d :: ", t);
 
         int p = priority[task_idx];
 
@@ -72,11 +72,11 @@ void operations (int m, int n, int *executionTime, int *priority, int *result)  
         if (core_idx == -1) {
             t++;
             time_updated = true;
-            printf("doing nothing!!\n");
+            // printf("doing nothing!!\n");
             continue;
         }
 
-        printf("scheduling task-%d on core-%d\n", task_idx, core_idx);
+        // printf("scheduling task-%d on core-%d\n", task_idx, core_idx);
 
         // core is busy now!
         core_free_status[core_idx] = 1;

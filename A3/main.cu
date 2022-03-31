@@ -3,11 +3,12 @@
 
 #include <stdio.h>
 #include <cuda.h>
-// #include <iostream>
 
 using namespace std;
 
+
 __device__ volatile int t = 0;
+
 
 __global__ void initialize(volatile int *array, int size, int value) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -19,15 +20,8 @@ __global__ void simulate(volatile int *task_schedule_status, int *priority, int 
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx > n) { return; }
 
-
-    // mantain the state of what of tasks are already scheduled?
-    // [0, 0, 0, 0, 0] -> [1, 0, 0, 0, 0] -> [1, 1, 0, 0, 0] -> ...
-    // next tasks is going to get scheduled only when previous task is already scheduled
-    // + if the core is free
-
     // current task can't execute untill the previous task is already scheduled
     while (idx > 0 && task_schedule_status[idx - 1] == 0) ;
-    // printf("task-%d unlocked\n", idx);
 
     int p = priority[idx];
     int core_idx = priority_to_core_map[p];
@@ -44,12 +38,6 @@ __global__ void simulate(volatile int *task_schedule_status, int *priority, int 
     }
 
     if (core_free_status[core_idx] == 1) {
-        // printf("core free status BEFORE ");
-        // for (int i = 0; i < m; i++) {
-        //     printf("%d ", core_free_status[i]);
-        // }
-        // printf("\n");
-
         t = core_busy_time[core_idx];
 
         // free the cores whenever needed
@@ -58,27 +46,15 @@ __global__ void simulate(volatile int *task_schedule_status, int *priority, int 
                 core_free_status[i] = 0;
             }
         }
-
-        // printf("core free status AFTER ");
-        // for (int i = 0; i < m; i++) {
-        //     printf("%d ", core_free_status[i]);
-        // }
-        // printf("\n");
     }
-
-    // otherwise: whether core idx we get, task should be executed on that!
-
-    // core idx would be some no between 0 ... N-1
-    // it indicates the core on which task must be executed
 
     result[idx] = t + executionTime[idx];
     // we want all the tasks to wait until that core is free
-    printf("t=%d | task-%d is scheduled on core-%d untill %d units time\n", t, idx, core_idx, result[idx]);
+    // printf("t=%d | task-%d is scheduled on core-%d untill %d units time\n", t, idx, core_idx, result[idx]);
 
     core_busy_time[core_idx] = result[idx];
     core_free_status[core_idx] = 1;
 
-    // printf("unlocking next task ...\n\n");
     task_schedule_status[idx] = 1; // unlock next thread
 }
 
@@ -102,7 +78,6 @@ void operations ( int m, int n, int *executionTime, int *priority, int *result )
     cudaMemcpy(d_priority, priority, n * sizeof(int), cudaMemcpyHostToDevice);
 
     // ###################################################################
-    // volatile int t = 0;
     int num_blocks;
 
     volatile int *d_task_schedule_status;
@@ -134,7 +109,7 @@ void operations ( int m, int n, int *executionTime, int *priority, int *result )
 
     // TODO: think can we have threads within same warp?
     // num_blocks = ceil(float(n) / 1024);
-    // simulate<<<num_blocks, 1024>>>();
+    // simulate<<<num_blocks, 1024>>>(d_task_schedule_status, d_priority, d_executionTime, d_priority_to_core_map, d_core_free_status, d_core_busy_time, d_result, n, m);
     simulate<<<n, 1>>>(d_task_schedule_status, d_priority, d_executionTime, d_priority_to_core_map, d_core_free_status, d_core_busy_time, d_result, n, m);
     cudaDeviceSynchronize();
 
@@ -142,11 +117,6 @@ void operations ( int m, int n, int *executionTime, int *priority, int *result )
     cudaMemcpy(result, d_result, n * sizeof(int), cudaMemcpyDeviceToHost);
 
     // free up GPU memory
-    // cudaFree(d_task_schedule_status);
-    // cudaFree(d_priority_to_core_map);
-    // cudaFree(d_core_free_status);
-    // cudaFree(d_core_busy_time);
-
     cudaFree(d_executionTime);
     cudaFree(d_priority);
     cudaFree(d_result);
