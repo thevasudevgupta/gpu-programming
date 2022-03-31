@@ -7,13 +7,13 @@
 using namespace std;
 
 
-__global__ void initialize(int *array, int size, int value) {
-    idx = blockIdx.x * blockDim.x + threadIdx.x;
+__global__ void initialize(volatile int *array, int size, int value) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx < size) { array[idx] = value; }
 }
 
 
-__global__ void simulate(int t, int *task_schedule_status, int *priority, int *executionTime,  int *priority_to_core_map, int *core_free_status, int *core_busy_time, int *result, int n, int m) {
+__global__ void simulate(volatile int t, volatile int *task_schedule_status, int *priority, int *executionTime,  volatile int *priority_to_core_map, volatile int *core_free_status, volatile  int *core_busy_time, int *result, int n, int m) {
     int idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (idx > n) { return; }
 
@@ -27,7 +27,7 @@ __global__ void simulate(int t, int *task_schedule_status, int *priority, int *e
     while (idx > 0 && task_schedule_status[idx - 1] == 0) ;
 
     int p = priority[idx];
-    int core_idx = priority_to_core_map[p]
+    int core_idx = priority_to_core_map[p];
     // task is not allocated any core yet! let's allocate core then!
     if (core_idx == -1) {
 
@@ -85,6 +85,7 @@ void operations ( int m, int n, int *executionTime, int *priority, int *result )
 
     // ###################################################################
     volatile int t = 0;
+    int num_blocks;
 
     volatile int *d_task_schedule_status;
     cudaMalloc(&d_task_schedule_status, n * sizeof(int));
@@ -123,10 +124,10 @@ void operations ( int m, int n, int *executionTime, int *priority, int *result )
     cudaMemcpy(result, d_result, n * sizeof(int), cudaMemcpyDeviceToHost);
 
     // free up GPU memory
-    cudaFree(d_task_schedule_status);
-    cudaFree(d_priority_to_core_map);
-    cudaFree(d_core_free_status);
-    cudaFree(d_core_busy_time);
+    // cudaFree(d_task_schedule_status);
+    // cudaFree(d_priority_to_core_map);
+    // cudaFree(d_core_free_status);
+    // cudaFree(d_core_busy_time);
 
     cudaFree(d_executionTime);
     cudaFree(d_priority);
