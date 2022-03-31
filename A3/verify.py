@@ -9,5 +9,9 @@ with open(f1) as f1:
 with open(f2) as f2:
     data2 = f2.read().split()
 
-assert data1 == data2, f"{data1}\n{data2}"
+# assert data1 == data2, f"{data1}\n{data2}"
+for i in range(len(data1)):
+    if data1[i] != data2[i]:
+        print(f"test case failed at index-{i}")
+        exit()
 print("test case passed!!")

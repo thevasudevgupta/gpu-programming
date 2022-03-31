@@ -1,4 +1,5 @@
 // nvcc main.cu && ./a.out sample.txt output.txt
+// nvcc main.cu && ./a.out Evaluation_script/testcases/input/input1.txt output.txt && python3 verify.py Evaluation_script/testcases/output/output1.txt output.txt
 
 #include <stdio.h>
 #include <cuda.h>
@@ -26,7 +27,7 @@ __global__ void simulate(volatile int *task_schedule_status, int *priority, int 
 
     // current task can't execute untill the previous task is already scheduled
     while (idx > 0 && task_schedule_status[idx - 1] == 0) ;
-    printf("task-%d unlocked\n", idx);
+    // printf("task-%d unlocked\n", idx);
 
     int p = priority[idx];
     int core_idx = priority_to_core_map[p];
@@ -72,13 +73,12 @@ __global__ void simulate(volatile int *task_schedule_status, int *priority, int 
 
     result[idx] = t + executionTime[idx];
     // we want all the tasks to wait until that core is free
-    printf("t=%d | task-%d is scheduled on core-%d\n", t, idx, core_idx);
-    printf("task end time: %d\n", result[idx]);
+    printf("t=%d | task-%d is scheduled on core-%d untill %d units time\n", t, idx, core_idx, result[idx]);
 
     core_busy_time[core_idx] = result[idx];
     core_free_status[core_idx] = 1;
 
-    printf("unlocking next task ...\n\n");
+    // printf("unlocking next task ...\n\n");
     task_schedule_status[idx] = 1; // unlock next thread
 }
 
