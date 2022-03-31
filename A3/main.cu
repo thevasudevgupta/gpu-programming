@@ -84,35 +84,40 @@ void operations ( int m, int n, int *executionTime, int *priority, int *result )
     cudaMemcpy(d_priority, priority, n * sizeof(int), cudaMemcpyHostToDevice);
 
     // ###################################################################
-    int volatile t = 0;
+    volatile int t = 0;
 
-    int volatile *d_task_schedule_status;
+    volatile int *d_task_schedule_status;
     cudaMalloc(&d_task_schedule_status, n * sizeof(int));
     num_blocks = ceil(float(n) / 1024);
     initialize<<<num_blocks, 1024>>>(d_task_schedule_status, n, 0);
+    cudaDeviceSynchronize();
     // 0 -> task is not scheduled yet
     // 1 -> task has been scheduled
 
-    int volatile *d_priority_to_core_map;
+    volatile int *d_priority_to_core_map;
     cudaMalloc(&d_priority_to_core_map, m * sizeof(int));
     num_blocks = ceil(float(m) / 1024);
     initialize<<<num_blocks, 1024>>>(d_priority_to_core_map, m, -1);
+    cudaDeviceSynchronize();
 
-    int volatile *d_core_free_status;
+    volatile int *d_core_free_status;
     cudaMalloc(&d_core_free_status, m * sizeof(int));
     num_blocks = ceil(float(m) / 1024);
     initialize<<<num_blocks, 1024>>>(d_core_free_status, m, 0);
+    cudaDeviceSynchronize();
 
-    int volatile *d_core_busy_time;
+    volatile int *d_core_busy_time;
     cudaMalloc(&d_core_busy_time, m * sizeof(int));
     num_blocks = ceil(float(m) / 1024);
     initialize<<<num_blocks, 1024>>>(d_core_busy_time, m, 0);
+    cudaDeviceSynchronize();
     // ###################################################################
 
     // TODO: think can we have threads within same warp?
     // num_blocks = ceil(float(n) / 1024);
     // simulate<<<num_blocks, 1024>>>();
     simulate<<<n, 1>>>(t, d_task_schedule_status, d_priority, d_executionTime, d_priority_to_core_map, d_core_free_status, d_core_busy_time, d_result, n, m);
+    cudaDeviceSynchronize();
 
     // copy results back to host
     cudaMemcpy(result, d_result, n * sizeof(int), cudaMemcpyDeviceToHost);
