@@ -1,4 +1,4 @@
-// nvcc sigmoid.cu && ./a.out
+// nvcc kernel_fusion.cu && ./a.out
 #include <iostream>
 #include <cuda.h>
 
@@ -11,7 +11,7 @@ __global__ void multiply(int a, int *X, int *output, int size) {
 
 __global__ void add(int *vector1, int *vector2, int size, int *output) {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
-    if (id < size) { output[id] = vector1[id] + vector[id]; }
+    if (id < size) { output[id] = vector1[id] + vector2[id]; }
     // 2 read + 1 write
 }
 
@@ -19,8 +19,9 @@ __global__ void add(int *vector1, int *vector2, int size, int *output) {
 void unfused_op(int a, int *X, int *B, int size, int *output) {
     int *temp;
     cudaMalloc(&temp, size * sizeof(int));
-    multiply<<<1, size>>>(a, X, temp, size);
-    add<<<1, size>>>(temp, B, size, output);
+    int num_blocks = ceil(float(size) / 1024);
+    multiply<<<num_blocks, 1024>>>(a, X, temp, size);
+    add<<<num_blocks, 1024>>>(temp, B, size, output);
     cudaFree(temp);
 
     // temp buffer is allocated (extra)
@@ -43,9 +44,8 @@ __global__ void print(int *input, int size) {
 }
 
 
-void main() {
-    int size;
-    cin >> size;
+int main() {
+    int size = 100000000;
 
     int *X = (int *) malloc(size * sizeof(int));
     int *B = (int *) malloc(size * sizeof(int));
@@ -65,35 +65,28 @@ void main() {
     cudaMemcpy(d_X, X, size * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, B, size * sizeof(int), cudaMemcpyHostToDevice);
 
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    float milliseconds = 0;
+    cudaEvent_t start, stop; cudaEventCreate(&start);
+    cudaEventCreate(&stop); float milliseconds = 0;
     cudaEventRecord(start,0);
 
-    unfused_op(a, d_X, d_B, size, d_output);
-    cudaDeviceSynchronize();
+    unfused_op(a, d_X, d_B, size, d_output); cudaDeviceSynchronize();
 
-    cudaEventRecord(stop, 0);
-    cudaEventSynchronize(stop);
+    cudaEventRecord(stop, 0); cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
     printf("Time taken by unfused op is: %.6f ms\n", milliseconds);
 
-    print<<<1, 1>>>(d_output, size);
+    // print<<<1, 1>>>(d_output, size); cudaDeviceSynchronize();
 
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    float milliseconds = 0;
-    cudaEventRecord(start, 0);
+    cudaEvent_t start2, stop2; cudaEventCreate(&start2);
+    cudaEventCreate(&stop2); float milliseconds2 = 0;
+    cudaEventRecord(start2, 0);
 
-    fused_op<<<1, size>>>(a, d_X, d_B, size, d_output);
-    cudaDeviceSynchronize();
+    int num_blocks = ceil(float(size) / 1024);
+    fused_op<<<num_blocks, 1024>>>(a, d_X, d_B, size, d_output); cudaDeviceSynchronize();
 
-    cudaEventRecord(stop,0);
-    cudaEventSynchronize(stop);
-    cudaEventElapsedTime(&milliseconds, start, stop);
-    printf("Time taken by fused op is: %.6f ms\n", milliseconds);
+    cudaEventRecord(stop2,0); cudaEventSynchronize(stop2);
+    cudaEventElapsedTime(&milliseconds2, start2, stop2);
+    printf("Time taken by fused op is: %.6f ms\n", milliseconds2);
 
-    print<<<1, 1>>>(d_output, size); 
+    // print<<<1, 1>>>(d_output, size); cudaDeviceSynchronize();
 }
