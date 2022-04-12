@@ -45,9 +45,17 @@ __global__ void print(int *input, int size) {
 
 void main() {
     int size;
-    int *X, *B;
-    int a;
-    // read from file
+    cin >> size;
+
+    int *X = (int *) malloc(size * sizeof(int));
+    int *B = (int *) malloc(size * sizeof(int));
+
+    // generate dummy inputs
+    for (int i = 0; i <  size; i++) {
+        X[i] = i;
+        B[i] = i * 2;
+    }
+    int a = 32;
 
     int *d_X, *d_B, *d_output;
     cudaMalloc(&d_X, size * sizeof(int));
@@ -66,7 +74,7 @@ void main() {
     unfused_op(a, d_X, d_B, size, d_output);
     cudaDeviceSynchronize();
 
-    cudaEventRecord(stop,0);
+    cudaEventRecord(stop, 0);
     cudaEventSynchronize(stop);
     cudaEventElapsedTime(&milliseconds, start, stop);
     printf("Time taken by unfused op is: %.6f ms\n", milliseconds);
@@ -77,7 +85,7 @@ void main() {
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     float milliseconds = 0;
-    cudaEventRecord(start,0);
+    cudaEventRecord(start, 0);
 
     fused_op<<<1, size>>>(a, d_X, d_B, size, d_output);
     cudaDeviceSynchronize();
