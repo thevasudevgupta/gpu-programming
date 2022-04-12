@@ -164,7 +164,7 @@ int main(int argc,char **argv)
         result[i] = 0;
     }
     
-     cudaEvent_t start, stop;
+    cudaEvent_t start, stop;
     cudaEventCreate(&start);
     cudaEventCreate(&stop);
     float milliseconds = 0;

@@ -57,13 +57,35 @@ void main() {
     cudaMemcpy(d_X, X, size * sizeof(int), cudaMemcpyHostToDevice);
     cudaMemcpy(d_B, B, size * sizeof(int), cudaMemcpyHostToDevice);
 
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    float milliseconds = 0;
+    cudaEventRecord(start,0);
+
     unfused_op(a, d_X, d_B, size, d_output);
     cudaDeviceSynchronize();
 
+    cudaEventRecord(stop,0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    printf("Time taken by unfused op is: %.6f ms\n", milliseconds);
+
     print<<<1, 1>>>(d_output, size);
+
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+    float milliseconds = 0;
+    cudaEventRecord(start,0);
 
     fused_op<<<1, size>>>(a, d_X, d_B, size, d_output);
     cudaDeviceSynchronize();
+
+    cudaEventRecord(stop,0);
+    cudaEventSynchronize(stop);
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    printf("Time taken by fused op is: %.6f ms\n", milliseconds);
 
     print<<<1, 1>>>(d_output, size); 
 }
