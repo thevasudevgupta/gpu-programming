@@ -2,6 +2,37 @@
 #include <iostream>
 #include <cuda.h>
 
+
+__global__ kernel1(int *b, int *c) {
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+    if (id < size) { c[id] = b[id]; }
+}
+
+__global__ kernel2(int *c, int *d) {
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+    if (id > 0 && id < size) { d[id] = c[id - 1]; }
+}
+
+__global__ fused_kernel(int *b, int *c, int *d) {
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+    if (id < size) {
+        c[id] = b[id];
+
+        if (id > 0) { d[id] = c[id - 1]; }
+    }
+}
+
+__global__ fused_kernel(int *b, int *c, int *d) {
+    int id = blockIdx.x * blockDim.x + threadIdx.x;
+    if (id < size) {
+        c[id] = b[id];
+
+        __syncthreads();
+        if (id > 0) { d[id] = c[id - 1]; }
+    }
+}
+
+
 __global__ void multiply(int a, int *X, int *output, int size) {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
     if (id < size) { output[id] = a * X[id]; }
