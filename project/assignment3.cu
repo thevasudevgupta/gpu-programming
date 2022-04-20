@@ -112,9 +112,6 @@ void operations ( int m, int n, int *executionTime, int *priority, int *result )
     cudaDeviceSynchronize();
     // ###################################################################
 
-    // TODO: think can we have threads within same warp?
-    // num_blocks = ceil(float(n) / 1024);
-    // simulate<<<num_blocks, 1024>>>(d_task_schedule_status, d_priority, d_executionTime, d_priority_to_core_map, d_core_free_status, d_core_busy_time, d_result, n, m);
     simulate<<<n, 1>>>(d_task_schedule_status, d_priority, d_executionTime, d_priority_to_core_map, d_core_free_status, d_core_busy_time, d_result, n, m);
     cudaDeviceSynchronize();
 
